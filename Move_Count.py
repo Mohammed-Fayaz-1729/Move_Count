@@ -2,16 +2,15 @@ import streamlit as st
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-import pandas as pd
-from datetime import datetime, timedelta
- 
+from datetime import datetime
+
 # Streamlit app configuration
 st.set_page_config(page_title="Move Forecast App", page_icon="📈", layout="centered")
- 
+
 # Title and description
 st.title("Move Forecast Application")
 st.markdown("Enter a date, branch, and optional move type to forecast move counts using our API.")
- 
+
 # Hardcoded unique values
 branch_options = [
     "", "Albuquerque", "Atlanta", "Atlanta 3", "Atlanta South", "Austin", "Austin South", "Baton Rouge",
@@ -30,13 +29,13 @@ branch_options = [
     "Seattle Micro", "St Louis", "Tampa", "Tucson", "Tulsa", "Tuscaloosa", "Twin Falls", "Virginia Beach",
     "Virginia North", "Waco"
 ]
- 
+
 move_type_options = [
     "", "Local", "Short Haul", "Labor Only", "INTERSTATE", "Long Distance", "ATS", "INTRA", "Corporate",
     "Unknown", "BOXES", "Short Haul Intrastate", "BackHaul", "Local Interstate", "Local Labor Only",
     "Long Distance Interstate", "Short Haul Interstate", "Linehaul", "Long Distance Backhaul", "Long Distance Linehaul"
 ]
- 
+
 # Input form
 with st.form(key="forecast_form"):
     # Date input (restricted to >= current date, <= July 31, 2025)
@@ -50,7 +49,7 @@ with st.form(key="forecast_form"):
         value=min_date,
         help=f"Choose a date between today ({current_date.strftime('%Y-%m-%d')}) and July 31, 2025."
     )
- 
+
     # Branch dropdown
     branch = st.selectbox(
         "Select Branch",
@@ -58,7 +57,7 @@ with st.form(key="forecast_form"):
         index=0,
         help="Choose a branch location."
     )
- 
+
     # Move Type dropdown
     move_type = st.selectbox(
         "Select Move Type (Optional)",
@@ -66,10 +65,10 @@ with st.form(key="forecast_form"):
         index=0,
         help="Choose a move type or leave empty."
     )
- 
+
     # Forecast button
     submit_button = st.form_submit_button(label="Get Forecast")
- 
+
 # Function to call the FastAPI endpoint with retry logic
 def call_forecast_api(date, branch, move_type):
     url = "https://move-count-forecast-jfev.onrender.com/forecast/"
@@ -95,7 +94,7 @@ def call_forecast_api(date, branch, move_type):
     except requests.exceptions.RequestException as e:
         st.error(f"Network Error: Unable to connect to the API. {str(e)}")
         return None
- 
+
 # Handle form submission
 if submit_button:
     if not branch:
@@ -105,50 +104,5 @@ if submit_button:
             result = call_forecast_api(date, branch, move_type)
             if result:
                 st.success("Forecast retrieved successfully!")
-                # Display forecast summary
-                st.subheader("Forecast Summary")
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("Branch", result.get("branch"))
-                    st.metric("Total Predicted Moves", result.get("total_predicted_moves"))
-                with col2:
-                    move_type_display = result.get("move_type") or "All Move Types"
-                    st.metric("Move Type", move_type_display)
-                    st.metric("Average Daily Moves", result.get("average_daily_moves"))
-                # Display forecast window
-                forecast_window = result.get("forecast_window", {})
-                start_date = forecast_window.get("start_date", "N/A")
-                end_date = forecast_window.get("end_date", "N/A")
-                st.caption(f"Forecast period: {start_date} to {end_date}")
-                # Display summary comment
-                summary_comment = result.get("summary_comment", "")
-                st.info(f"📊 **Summary Insight:** {summary_comment}")
-                # Display daily forecasts in a table
-                daily_data = result.get("predicted_summary", [])
-                if daily_data:
-                    st.subheader("Daily Forecast Details")
-                    # Convert to DataFrame and format dates
-                    df = pd.DataFrame(daily_data)
-                    df['date'] = pd.to_datetime(df['date']).dt.strftime('%a, %b %d, %Y')
-                    # Display as a table with formatted headers
-                    st.dataframe(
-                        df.rename(columns={
-                            "date": "Date",
-                            "predicted_moves": "Predicted Moves",
-                            "comment": "Analysis"
-                        }),
-                        height=500
-                    )
-                    # Add download button
-                    csv = df.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        label="Download Forecast Data",
-                        data=csv,
-                        file_name=f"move_forecast_{branch}_{date}.csv",
-                        mime='text/csv',
-                    )
-                else:
-                    st.warning("No daily forecast data available.")
-                # Raw API response in expander
-                with st.expander("View Raw API Response"):
-                    st.json(result)
+                st.subheader("Raw API Response")
+                st.json(result)
