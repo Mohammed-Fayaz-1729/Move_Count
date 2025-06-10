@@ -81,15 +81,17 @@ def call_forecast_api(date, branch, move_type):
     retries = Retry(total=5, backoff_factor=2, status_forcelist=[502, 503, 504])
     session.mount("https://", HTTPAdapter(max_retries=retries))
     try:
-        response = session.post(url, json=payload, timeout=100)
+        response = session.post(url, json=payload, timeout=60)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.HTTPError as e:
         try:
             error_detail = e.response.json().get("detail", e.response.text)
-        except ValueError:
+        except ValueError: # Catch JSONDecodeError
             error_detail = e.response.text
-        st.error(f"API Error (Status {e.response.status_code}): {error_detail}")
+        # Display the raw error response content
+        st.error(f"API Error (Status {e.response.status_code}):")
+        st.code(error_detail, language='text')
         return None
     except requests.exceptions.RequestException as e:
         st.error(f"Network Error: Unable to connect to the API. {str(e)}")
@@ -103,6 +105,5 @@ if submit_button:
         with st.spinner("Fetching forecast..."):
             result = call_forecast_api(date, branch, move_type)
             if result:
-                st.success("Forecast retrieved successfully!")
-                st.subheader("Raw API Response")
+                # Only show the raw JSON response for success
                 st.json(result)
