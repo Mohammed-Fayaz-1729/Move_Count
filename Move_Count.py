@@ -81,7 +81,7 @@ def call_forecast_api(date, branch, move_type):
     retries = Retry(total=5, backoff_factor=2, status_forcelist=[502, 503, 504])
     session.mount("https://", HTTPAdapter(max_retries=retries))
     try:
-        response = session.post(url, json=payload, timeout=60)
+        response = session.post(url, json=payload, timeout=100)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.HTTPError as e:
