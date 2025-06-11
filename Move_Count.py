@@ -38,7 +38,6 @@ move_type_options = [
 
 # Input form
 with st.form(key="forecast_form"):
-    # Date input (restricted to >= current date, <= July 31, 2025)
     current_date = datetime.now().date()
     min_date = current_date
     max_date = datetime(2025, 7, 31).date()
@@ -50,7 +49,6 @@ with st.form(key="forecast_form"):
         help=f"Choose a date between today ({current_date.strftime('%Y-%m-%d')}) and July 31, 2025."
     )
 
-    # Branch dropdown
     branch = st.selectbox(
         "Select Branch",
         options=branch_options,
@@ -58,7 +56,6 @@ with st.form(key="forecast_form"):
         help="Choose a branch location."
     )
 
-    # Move Type dropdown
     move_type = st.selectbox(
         "Select Move Type (Optional)",
         options=move_type_options,
@@ -66,11 +63,15 @@ with st.form(key="forecast_form"):
         help="Choose a move type or leave empty."
     )
 
-    # Forecast button
     submit_button = st.form_submit_button(label="Get Forecast")
 
-# Function to call the FastAPI endpoint with retry logic
-def call_forecast_api(date, branch, move_type):
+# --- Caching the API call ---
+@st.cache_data(show_spinner="Fetching forecast from API...")
+def call_forecast_api_cached(date, branch, move_type):
+    """
+    Cached version of the API call.
+    Caches results for each unique (date, branch, move_type) combination.
+    """
     url = "https://move-count-forecast-jfev.onrender.com/forecast/"
     payload = {
         "date": date.strftime("%Y-%m-%d"),
@@ -81,21 +82,17 @@ def call_forecast_api(date, branch, move_type):
     retries = Retry(total=5, backoff_factor=2, status_forcelist=[502, 503, 504])
     session.mount("https://", HTTPAdapter(max_retries=retries))
     try:
-        response = session.post(url, json=payload, timeout=120)
+        response = session.post(url, json=payload, timeout=30)  # Reduced timeout for free tier
         response.raise_for_status()
         return response.json()
     except requests.exceptions.HTTPError as e:
         try:
             error_detail = e.response.json().get("detail", e.response.text)
-        except ValueError: # Catch JSONDecodeError
+        except Exception:
             error_detail = e.response.text
-        # Display the raw error response content
-        st.error(f"API Error (Status {e.response.status_code}):")
-        st.code(error_detail, language='text')
-        return None
+        return {"error": f"API Error (Status {e.response.status_code}): {error_detail}"}
     except requests.exceptions.RequestException as e:
-        st.error(f"Network Error: Unable to connect to the API. {str(e)}")
-        return None
+        return {"error": f"Network Error: Unable to connect to the API. {str(e)}"}
 
 # Handle form submission
 if submit_button:
@@ -103,7 +100,9 @@ if submit_button:
         st.error("Please select a valid Branch.")
     else:
         with st.spinner("Fetching forecast..."):
-            result = call_forecast_api(date, branch, move_type)
+            result = call_forecast_api_cached(date, branch, move_type)
             if result:
-                # Only show the raw JSON response for success
-                st.json(result)
+                if "error" in result:
+                    st.error(result["error"])
+                else:
+                    st.json(result)
